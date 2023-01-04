@@ -2,4 +2,4 @@
 /go-cqhttp/logs
 /go-cqhttp/device.json
 /go-cqhttp/session.token
-/go-cqhttp/config.yaml
+/go-cqhttp/config.yml
