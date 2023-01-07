@@ -3,7 +3,6 @@ package bilibili
 import (
 	"bot-go/src/database/localSqlite3"
 	"bot-go/src/plugin/bilibili/model"
-	"fmt"
 	"github.com/sirupsen/logrus"
 	zero "github.com/wdvxdr1123/ZeroBot"
 	"github.com/wdvxdr1123/ZeroBot/message"
@@ -15,64 +14,35 @@ import (
 	"time"
 )
 
+var (
+	db *gorm.DB
+)
+
 func init() {
-	// 数据库连接迁移
-	cwd, err := os.Getwd()
+	err := InitAndMigrate()
 	if err != nil {
-		logrus.Fatalf("[bilibili][database] %s", err)
+		logrus.Fatalf("[bilibili][InitAndMigrate] %s", err)
 	}
-	db, err := localSqlite3.Init(filepath.Join(cwd, "..", "data", "database", "localSqlite3", "bilibili.db"))
-	if err != nil {
-		logrus.Fatalf("[bilibili][database] %s", err)
-	}
-	if err := db.AutoMigrate(&model.User{}); err != nil {
-		logrus.Fatalf("[bilibili][database] %s", err)
-	}
-	// 指令定义
-	zero.OnCommand("关注", zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).
-		Handle(func(ctx *zero.Ctx) {
-			args := ctx.State["args"].(string)
-			uid, err := strconv.ParseUint(args, 10, 64)
-			if err != nil {
-				logrus.Errorf("[bilibili][关注] %s", err)
-				ctx.Send(message.Text("兔兔不懂"))
-				return
-			}
-			user := model.User{
-				Uid:   uid,
-				Group: (uint64)(ctx.Event.GroupID),
-			}
-			if err := user.Create(db); err != nil {
-				logrus.Errorf("[bilibili][关注] %s", err)
-				ctx.Send(message.Text("兔兔坏掉了"))
-				return
-			}
-			// success
-			logrus.Infof("[bilibili][关注] 成功关注%s", args)
-			ctx.Send(message.Text(fmt.Sprintf("兔兔记住了%s", args)))
-		})
-	zero.OnCommand("取关", zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).
-		Handle(func(ctx *zero.Ctx) {
-			args := ctx.State["args"].(string)
-			uid, err := strconv.ParseUint(args, 10, 64)
-			if err != nil {
-				logrus.Errorf("[bilibili][取关] %s", err)
-				ctx.Send(message.Text("兔兔不懂"))
-				return
-			}
-			user := model.User{
-				Uid:   uid,
-				Group: (uint64)(ctx.Event.GroupID),
-			}
-			if err := user.Delete(db); err != nil {
-				logrus.Errorf("[bilibili][取关] %s", err)
-				ctx.Send(message.Text("兔兔坏掉了"))
-				return
-			}
-			// success
-			logrus.Infof("[bilibili][关注] 成功取关%s", args)
-			ctx.Send(message.Text(fmt.Sprintf("兔兔忘记了%s", args)))
-		})
+	// example: 兔兔 关注 明日方舟 161775300
+	zero.OnRegex("^关注 (.+) (.+)$", zero.OnlyToMe, zero.OnlyGroup).
+		SetBlock(true).Handle(func(ctx *zero.Ctx) {
+		err := Subscribe(ctx, db)
+		if err != nil {
+			logrus.Errorf("[bilibili][Subscribe] %s", err)
+		} else {
+			logrus.Infof("[bilibili][Subscribe][Success]")
+		}
+	})
+	// example: 兔兔 取关 明日方舟
+	zero.OnRegex("取关 (.+)", zero.OnlyToMe, zero.OnlyGroup).
+		SetBlock(true).Handle(func(ctx *zero.Ctx) {
+		err := Unsubscribe(ctx, db)
+		if err != nil {
+			logrus.Errorf("[bilibili][Subscribe] %s", err)
+		} else {
+			logrus.Infof("[bilibili][Unsubscribe][Success]")
+		}
+	})
 	// 轮询
 	go func() {
 		interval := time.Second * 3
@@ -85,53 +55,117 @@ func init() {
 			case <-quit: // handle quit first
 				os.Exit(0)
 			case <-timer.C:
-				PollingHandler(db)
+				err := Polling(db)
+				if err != nil {
+					logrus.Errorf("[bilibili][Polling] %s", err)
+				}
 				timer.Reset(interval)
 			}
 		}
 	}()
 }
 
-func PollingHandler(db *gorm.DB) {
+func InitAndMigrate() error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	db, err = localSqlite3.Init(
+		filepath.Join(cwd, "..", "data", "database", "localSqlite3", "bilibili.db"),
+	)
+	if err != nil {
+		return err
+	}
+
+	err = db.AutoMigrate(&model.Task{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func Subscribe(ctx *zero.Ctx, db *gorm.DB) error {
+	args := ctx.State["regex_matched"].([]string)
+	uid, err := strconv.ParseInt(args[2], 10, 64)
+	if err != nil {
+		return err
+	}
+
+	task := &model.Task{
+		Up: model.Up{
+			NicName: args[1],
+			UID:     uid,
+		},
+		GroupID:   ctx.Event.GroupID,
+		Timestamp: 0,
+	}
+
+	err = task.CreateOrUpdate(db)
+	if err != nil {
+		return err
+	}
+
+	ctx.Send("兔兔记住了")
+
+	return nil
+}
+
+func Unsubscribe(ctx *zero.Ctx, db *gorm.DB) error {
+	args := ctx.State["regex_matched"].([]string)
+
+	user := &model.Task{
+		Up: model.Up{
+			NicName: args[1],
+		},
+		GroupID: ctx.Event.GroupID,
+	}
+
+	err := user.Delete(db)
+	if err != nil {
+		return err
+	}
+
+	ctx.Send("兔兔忘记了")
+
+	return nil
+}
+
+func Polling(db *gorm.DB) error {
 	ctx := zero.GetBot(2245788922)
 	if ctx == nil {
-		logrus.Warnf("[bilibili][轮询] %s", "无法获取ctx")
-		return
-	}
-	users, err := model.User{}.ReadAll(db)
-	if err != nil {
-		logrus.Errorf("[bilibili][轮询] %s", "无法获取users")
-		return
+		logrus.Warnf("[bilibili][Polling] %s", "GetBot failed")
+		return nil
 	}
 
-	for _, user := range users {
-		timestamp, description, pictures, err := user.GetLatestDynamic()
+	tasks, err := model.Task{}.ReadAll(db)
+	if err != nil {
+		return err
+	}
+
+	for _, task := range tasks {
+		dynamic, err := task.Up.GetLatestDynamic()
 		if err != nil {
-			logrus.Errorf("[bilibili][轮询] %s", err)
-			ctx.Send(message.Text("兔兔被识破了"))
-			return
+			return err
 		}
 
-		if timestamp == user.Timestamp {
+		if dynamic.Timestamp == task.Timestamp {
 			continue
 		}
 
-		ctx.SendGroupMessage((int64)(user.Group), message.Text(description))
-
-		for _, src := range pictures {
-			ctx.SendGroupMessage((int64)(user.Group), message.Image(src))
+		ctx.SendGroupMessage(task.GroupID, message.Text(dynamic.Description))
+		for _, src := range dynamic.Pictures {
+			ctx.SendGroupMessage(task.GroupID, message.Image(src))
 		}
 
-		user.Timestamp = timestamp
-		if err := user.Update(db); err != nil {
-			logrus.Errorf("[bilibili][轮询] %s", err)
-			ctx.Send(message.Text("兔兔坏掉了"))
-			return
-		}
-		if err := user.Update(db); err != nil {
-			logrus.Errorf("[bilibili][轮询] %s", err)
-			ctx.Send(message.Text("兔兔坏掉了"))
-			return
+		task.Timestamp = dynamic.Timestamp
+
+		err = task.Update(db)
+		if err != nil {
+			return err
 		}
 	}
+
+	return nil
 }

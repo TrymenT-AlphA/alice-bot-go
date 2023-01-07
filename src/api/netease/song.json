@@ -1,0 +1,12 @@
+{
+  "url": {
+    "url": "http://139.9.51.153:3002/song/url",
+    "method": "GET",
+    "verify": false,
+    "params": {
+      "id": "歌曲id",
+      "br": "码率"
+    },
+    "comment": "获取用户歌单"
+  }
+}

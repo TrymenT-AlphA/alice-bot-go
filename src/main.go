@@ -2,8 +2,12 @@ package main
 
 import (
 	// plugin
-	_ "bot-go/src/plugin/alive"
 	_ "bot-go/src/plugin/bilibili"
+	_ "bot-go/src/plugin/meta"
+	_ "bot-go/src/plugin/netease"
+	"os"
+	"path/filepath"
+
 	// import
 	"github.com/sirupsen/logrus"
 	easy "github.com/t-tomalak/logrus-easy-formatter"
@@ -20,6 +24,24 @@ func init() {
 }
 
 func main() {
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		logrus.Fatalf("[TOP] %s", err)
+	}
+
+	cacheDir := filepath.Join(cwd, "..", "data", "cache")
+	databaseDir := filepath.Join(cwd, "..", "data", "database")
+
+	err = os.MkdirAll(cacheDir, 0666)
+	if err != nil {
+		logrus.Fatalf("[TOP] %s", err)
+	}
+	err = os.MkdirAll(databaseDir, 0666)
+	if err != nil {
+		logrus.Fatalf("[TOP] %s", err)
+	}
+
 	zero.RunAndBlock(&zero.Config{
 		NickName:      []string{"兔兔"},
 		CommandPrefix: "",

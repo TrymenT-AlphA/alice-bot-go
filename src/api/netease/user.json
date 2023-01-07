@@ -1,0 +1,11 @@
+{
+  "playlist": {
+    "url": "http://139.9.51.153:3002/user/playlist",
+    "method": "GET",
+    "verify": false,
+    "params": {
+      "uid": "用户id"
+    },
+    "comment": "获取用户歌单"
+  }
+}
