@@ -2,9 +2,10 @@ package main
 
 import (
 	// plugin
-	_ "bot-go/src/plugin/bilibili"
-	_ "bot-go/src/plugin/meta"
-	_ "bot-go/src/plugin/netease"
+	_ "alice-bot-go/src/plugin/bilibili"
+	_ "alice-bot-go/src/plugin/github"
+	_ "alice-bot-go/src/plugin/meta"
+	_ "alice-bot-go/src/plugin/netease"
 	"os"
 	"path/filepath"
 
@@ -16,31 +17,15 @@ import (
 )
 
 func init() {
+	// config logger
 	logrus.SetFormatter(&easy.Formatter{
 		TimestampFormat: "2006-01-02 15:04:05",
-		LogFormat:       "[zerobot][%time%][%lvl%]: %msg% \n",
+		LogFormat:       "[%time%][%lvl%]%msg% \n",
 	})
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
 func main() {
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		logrus.Fatalf("[TOP] %s", err)
-	}
-
-	cacheDir := filepath.Join(cwd, "..", "data", "cache")
-	databaseDir := filepath.Join(cwd, "..", "data", "database")
-
-	err = os.MkdirAll(cacheDir, 0666)
-	if err != nil {
-		logrus.Fatalf("[TOP] %s", err)
-	}
-	err = os.MkdirAll(databaseDir, 0666)
-	if err != nil {
-		logrus.Fatalf("[TOP] %s", err)
-	}
 
 	zero.RunAndBlock(&zero.Config{
 		NickName:      []string{"兔兔"},
@@ -49,5 +34,23 @@ func main() {
 		Driver: []zero.Driver{
 			driver.NewWebSocketClient("ws://127.0.0.1:6700", ""),
 		},
-	}, nil)
+	}, func() { // preBlock func
+		cwd, err := os.Getwd()
+		if err != nil {
+			logrus.Fatalf("[PreBlock] %s", err)
+		}
+
+		cacheDir := filepath.Join(cwd, "..", "data", "cache")
+		err = os.MkdirAll(cacheDir, 0666)
+		if err != nil {
+			logrus.Fatalf("[PreBlock] %s", err)
+		}
+
+		databaseDir := filepath.Join(cwd, "..", "data", "database")
+		err = os.MkdirAll(databaseDir, 0666)
+		if err != nil {
+			logrus.Fatalf("[PreBlock] %s", err)
+		}
+		//	now we should have `data/cache` and `data/database`
+	})
 }

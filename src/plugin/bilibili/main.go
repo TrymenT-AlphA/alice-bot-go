@@ -1,8 +1,9 @@
 package bilibili
 
 import (
-	"bot-go/src/database/localSqlite3"
-	"bot-go/src/plugin/bilibili/model"
+	"alice-bot-go/src/database/localSqlite3"
+	"alice-bot-go/src/plugin/bilibili/model"
+	"fmt"
 	"github.com/sirupsen/logrus"
 	zero "github.com/wdvxdr1123/ZeroBot"
 	"github.com/wdvxdr1123/ZeroBot/message"
@@ -15,37 +16,44 @@ import (
 )
 
 var (
-	db *gorm.DB
+	db    *gorm.DB
+	cache string
 )
 
 func init() {
-	err := InitAndMigrate()
+	// initialize
+	err := Initialize()
 	if err != nil {
-		logrus.Fatalf("[bilibili][InitAndMigrate] %s", err)
+		logrus.Fatalf("[bilibili][Initialize] %s", err)
+	} else {
+		logrus.Infof("[bilibili][Initialize][success]")
 	}
+
 	// example: 兔兔 关注 明日方舟 161775300
-	zero.OnRegex("^关注 (.+) (.+)$", zero.OnlyToMe, zero.OnlyGroup).
-		SetBlock(true).Handle(func(ctx *zero.Ctx) {
+	zero.OnRegex("^关注 (.+) (.+)$", zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
 		err := Subscribe(ctx, db)
 		if err != nil {
 			logrus.Errorf("[bilibili][Subscribe] %s", err)
+			ctx.Send(message.Text(fmt.Sprintf("[bilibili][Subscribe] %s", err)))
 		} else {
-			logrus.Infof("[bilibili][Subscribe][Success]")
+			logrus.Infof("[bilibili][Subscribe][success]")
 		}
 	})
+
 	// example: 兔兔 取关 明日方舟
-	zero.OnRegex("取关 (.+)", zero.OnlyToMe, zero.OnlyGroup).
-		SetBlock(true).Handle(func(ctx *zero.Ctx) {
+	zero.OnRegex("^取关 (.+)$", zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
 		err := Unsubscribe(ctx, db)
 		if err != nil {
-			logrus.Errorf("[bilibili][Subscribe] %s", err)
+			logrus.Errorf("[bilibili][Unsubscribe] %s", err)
+			ctx.Send(message.Text(fmt.Sprintf("[bilibili][Unsubscribe] %s", err)))
 		} else {
-			logrus.Infof("[bilibili][Unsubscribe][Success]")
+			logrus.Infof("[bilibili][Unsubscribe][success]")
 		}
 	})
+
 	// 轮询
 	go func() {
-		interval := time.Second * 3
+		interval := time.Second * 10
 		timer := time.NewTimer(interval)
 		quit := make(chan os.Signal, 1)
 		signal.Notify(quit, os.Interrupt, os.Kill)
@@ -54,26 +62,40 @@ func init() {
 			select {
 			case <-quit: // handle quit first
 				os.Exit(0)
+
 			case <-timer.C:
-				err := Polling(db)
+				ctx := zero.GetBot(2245788922)
+				if ctx == nil {
+					logrus.Warnf("[bilibili][Polling] GetBot failed")
+					continue
+				}
+
+				err := Polling(ctx)
 				if err != nil {
 					logrus.Errorf("[bilibili][Polling] %s", err)
+				} else {
+					logrus.Infof("[bilibili][Polling][success]")
 				}
+
 				timer.Reset(interval)
 			}
 		}
 	}()
 }
 
-func InitAndMigrate() error {
+func Initialize() error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
-	db, err = localSqlite3.Init(
-		filepath.Join(cwd, "..", "data", "database", "localSqlite3", "bilibili.db"),
-	)
+	cache = filepath.Join(cwd, "..", "data", "cache", "bilibili")
+	err = os.MkdirAll(cache, 0666)
+	if err != nil {
+		return err
+	}
+
+	db, err = localSqlite3.Init("bilibili.db")
 	if err != nil {
 		return err
 	}
@@ -88,6 +110,7 @@ func InitAndMigrate() error {
 
 func Subscribe(ctx *zero.Ctx, db *gorm.DB) error {
 	args := ctx.State["regex_matched"].([]string)
+
 	uid, err := strconv.ParseInt(args[2], 10, 64)
 	if err != nil {
 		return err
@@ -107,7 +130,7 @@ func Subscribe(ctx *zero.Ctx, db *gorm.DB) error {
 		return err
 	}
 
-	ctx.Send("兔兔记住了")
+	ctx.Send(message.Text("关注成功"))
 
 	return nil
 }
@@ -115,31 +138,25 @@ func Subscribe(ctx *zero.Ctx, db *gorm.DB) error {
 func Unsubscribe(ctx *zero.Ctx, db *gorm.DB) error {
 	args := ctx.State["regex_matched"].([]string)
 
-	user := &model.Task{
+	task := &model.Task{
 		Up: model.Up{
 			NicName: args[1],
 		},
 		GroupID: ctx.Event.GroupID,
 	}
 
-	err := user.Delete(db)
+	err := task.Delete(db)
 	if err != nil {
 		return err
 	}
 
-	ctx.Send("兔兔忘记了")
+	ctx.Send(message.Text("取关成功"))
 
 	return nil
 }
 
-func Polling(db *gorm.DB) error {
-	ctx := zero.GetBot(2245788922)
-	if ctx == nil {
-		logrus.Warnf("[bilibili][Polling] %s", "GetBot failed")
-		return nil
-	}
-
-	tasks, err := model.Task{}.ReadAll(db)
+func Polling(ctx *zero.Ctx) error {
+	tasks, err := (&model.Task{}).ReadAll(db)
 	if err != nil {
 		return err
 	}
@@ -150,7 +167,7 @@ func Polling(db *gorm.DB) error {
 			return err
 		}
 
-		if dynamic.Timestamp == task.Timestamp {
+		if dynamic.Timestamp <= task.Timestamp {
 			continue
 		}
 

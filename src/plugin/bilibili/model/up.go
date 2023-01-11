@@ -1,8 +1,9 @@
 package model
 
 import (
-	"bot-go/src/types"
+	"alice-bot-go/src/types"
 	"github.com/tidwall/gjson"
+	"net/http"
 )
 
 type Up struct {
@@ -25,7 +26,7 @@ func (up *Up) GetLatestDynamic() (*Dynamic, error) {
 	bilibiliAPI.Params["offset_dynamic_id"] = 0
 	bilibiliAPI.Params["need_top"] = false
 
-	data, err := bilibiliAPI.Request()
+	data, err := bilibiliAPI.DoRequest(&http.Client{})
 	if err != nil {
 		return nil, err
 	}

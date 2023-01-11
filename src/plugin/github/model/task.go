@@ -6,7 +6,7 @@ import (
 )
 
 type Task struct {
-	Up
+	Repo
 	GroupID   int64 `gorm:"primarykey"`
 	Timestamp int64
 }
@@ -34,8 +34,10 @@ func (task *Task) Create(db *gorm.DB) error {
 
 func (task *Task) Read(db *gorm.DB) error {
 	err := db.Where(&Task{
-		Up: Up{
-			UID: task.Up.UID,
+		Repo: Repo{
+			Owner: task.Repo.Owner,
+			Name:  task.Repo.Name,
+			Local: task.Repo.Local,
 		},
 		GroupID: task.GroupID,
 	}).First(task).Error
@@ -47,8 +49,10 @@ func (task *Task) Read(db *gorm.DB) error {
 
 func (task *Task) Update(db *gorm.DB) error {
 	err := db.Where(&Task{
-		Up: Up{
-			UID: task.Up.UID,
+		Repo: Repo{
+			Owner: task.Repo.Owner,
+			Name:  task.Repo.Name,
+			Local: task.Repo.Local,
 		},
 		GroupID: task.GroupID,
 	}).Updates(task).Error
@@ -60,8 +64,10 @@ func (task *Task) Update(db *gorm.DB) error {
 
 func (task *Task) Delete(db *gorm.DB) error {
 	err := db.Delete(&Task{
-		Up: Up{
-			UID: task.Up.UID,
+		Repo: Repo{
+			Owner: task.Repo.Owner,
+			Name:  task.Repo.Name,
+			Local: task.Repo.Local,
 		},
 		GroupID: task.GroupID,
 	}).Error

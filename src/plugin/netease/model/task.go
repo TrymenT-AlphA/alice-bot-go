@@ -16,21 +16,13 @@ type Task struct {
 }
 
 func (task *Task) Download(dir string) error {
-
-	file := filepath.Join(dir, fmt.Sprintf("%s.%s", task.Name, task.Type))
-
-	if _, err := os.Stat(file); err != nil {
-		if os.IsExist(err) {
-			return nil
-		}
-	}
-
 	out, err := os.OpenFile(
 		filepath.Join(dir, fmt.Sprintf("%s.%s", task.Name, task.Type)),
 		os.O_WRONLY|os.O_CREATE, 0666,
 	)
-
-	writer := bufio.NewWriter(out)
+	if err != nil {
+		return err
+	}
 
 	response, err := http.Get(task.Url)
 	if err != nil {
@@ -46,6 +38,8 @@ func (task *Task) Download(dir string) error {
 	if err != nil {
 		return err
 	}
+
+	writer := bufio.NewWriter(out)
 
 	_, err = writer.Write(data)
 	if err != nil {

@@ -1,7 +1,7 @@
 package model
 
 import (
-	"bot-go/src/types"
+	"alice-bot-go/src/types"
 	"github.com/tidwall/gjson"
 	"net/http"
 	"os"
@@ -26,7 +26,7 @@ func (session *Session) GetPlayList() ([]Play, error) {
 
 	neteaseAPI.Params["uid"] = session.UID
 
-	data, err := neteaseAPI.RequestWithAuth(session.Client)
+	data, err := neteaseAPI.DoRequest(session.Client)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (session *Session) GetTrackList(play *Play) ([]Track, error) {
 
 	neteaseAPI.Params["id"] = play.PID
 
-	data, err := neteaseAPI.RequestWithAuth(session.Client)
+	data, err := neteaseAPI.DoRequest(session.Client)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func (session *Session) GetTask(track *Track) (*Task, error) {
 
 	neteaseAPI.Params["id"] = track.TID
 
-	data, err := neteaseAPI.RequestWithAuth(session.Client)
+	data, err := neteaseAPI.DoRequest(session.Client)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func (session *Session) DownloadTrack(track *Track, dir string) error {
 	neteaseAPI.Params["id"] = track.TID
 	neteaseAPI.Params["br"] = 128000
 
-	data, err := neteaseAPI.RequestWithAuth(session.Client)
+	data, err := neteaseAPI.DoRequest(session.Client)
 	if err != nil {
 		return err
 	}

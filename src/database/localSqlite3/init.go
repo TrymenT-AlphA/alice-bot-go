@@ -7,20 +7,23 @@ import (
 	"path/filepath"
 )
 
-func Init(dsn string) (*gorm.DB, error) {
+func Init(dbFile string) (*gorm.DB, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
-	err = os.MkdirAll(filepath.Join(cwd, "..", "data", "database", "localSqlite3"), 0666)
 
+	localSqlite3Dir := filepath.Join(cwd, "..", "data", "database", "localSqlite3")
+
+	err = os.MkdirAll(localSqlite3Dir, 0666)
 	if err != nil {
 		return nil, err
 	}
 
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(filepath.Join(localSqlite3Dir, dbFile)), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
+
 	return db, nil
 }

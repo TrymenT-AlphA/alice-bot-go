@@ -1,7 +1,7 @@
 package model
 
 import (
-	"bot-go/src/types"
+	"alice-bot-go/src/types"
 	"github.com/tidwall/gjson"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -16,7 +16,7 @@ type Account struct {
 	Password string
 }
 
-func (Account) TableName() string {
+func (*Account) TableName() string {
 	return "Account"
 }
 
@@ -106,7 +106,7 @@ func (account *Account) Login() (*Session, error) {
 		},
 	}
 
-	data, err := neteaseAPI.RequestWithAuth(session.Client)
+	data, err := neteaseAPI.DoRequest(session.Client)
 	if err != nil {
 		return nil, err
 	}

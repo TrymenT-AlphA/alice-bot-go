@@ -1,23 +1,21 @@
 package netease
 
 import (
-	"bot-go/src/database/localSqlite3"
-	"bot-go/src/plugin/netease/model"
-	"bot-go/src/util"
+	"alice-bot-go/src/database/localSqlite3"
+	"alice-bot-go/src/plugin/netease/model"
+	"alice-bot-go/src/util"
 	"bytes"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	zero "github.com/wdvxdr1123/ZeroBot"
 	"github.com/wdvxdr1123/ZeroBot/message"
 	"gorm.io/gorm"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Context guess music context, each one for each group
@@ -32,22 +30,19 @@ type Context struct {
 }
 
 var (
-	db *gorm.DB
-
-	contexts map[int64]*Context
-
-	cwd      string
-	database string
+	db       *gorm.DB
 	cache    string
+	contexts map[int64]*Context
 )
 
 func init() {
-	// 数据库连接迁移
-	err := InitAndMigrate()
+	// Initialize
+	err := Initialize()
 	if err != nil {
-		logrus.Fatalf("[netease][InitAndMigrate] %s", err)
+		logrus.Fatalf("[netease][Initialize] %s", err)
+	} else {
+		logrus.Infof("[netease][Initialize][success]")
 	}
-	logrus.Infof("[netease][InitAndMigrate][success]")
 
 	// OnlyPrivate Context Free
 	// example: 注册 AliceRemake <Phone> <Password>
@@ -55,8 +50,9 @@ func init() {
 		err := Register(ctx)
 		if err != nil {
 			logrus.Errorf("[netease][Register] %s", err)
+			ctx.Send(message.Text(fmt.Sprintf("[netease][Register] %s", err)))
 		} else {
-			logrus.Infof("[netease][Register][Success]")
+			logrus.Infof("[netease][Register][success]")
 		}
 	})
 	// example: 注销 AliceRemake
@@ -64,8 +60,9 @@ func init() {
 		err := Revoke(ctx)
 		if err != nil {
 			logrus.Errorf("[netease][Revoke] %s", err)
+			ctx.Send(message.Text(fmt.Sprintf("[netease][Revoke] %s", err)))
 		} else {
-			logrus.Infof("[netease][Revoke][Success]")
+			logrus.Infof("[netease][Revoke][success]")
 		}
 	})
 	// example: 账号列表
@@ -73,8 +70,9 @@ func init() {
 		err := AccountList(ctx)
 		if err != nil {
 			logrus.Errorf("[netease][AccountList] %s", err)
+			ctx.Send(message.Text(fmt.Sprintf("[netease][AccountList] %s", err)))
 		} else {
-			logrus.Infof("[netease][AccountList][Success]")
+			logrus.Infof("[netease][AccountList][success]")
 		}
 	})
 
@@ -85,24 +83,25 @@ func init() {
 		err := Login(ctx)
 		if err != nil {
 			logrus.Errorf("[netease][Login] %s", err)
+			ctx.Send(message.Text(fmt.Sprintf("[netease][Login] %s", err)))
 		} else {
-			logrus.Infof("[netease][Login][Success]")
+			logrus.Infof("[netease][Login][success]")
 		}
 	})
 	// example: 兔兔 登出
 	zero.OnRegex(`^登出$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
 		Logout(ctx)
-		logrus.Infof("[netease][Logout][Success]")
+		logrus.Infof("[netease][Logout][success]")
 	})
 	// example: 兔兔 登录信息
 	zero.OnRegex(`^登录信息$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
 		LoginStatus(ctx)
-		logrus.Infof("[netease][LoginStatus][Success]")
+		logrus.Infof("[netease][LoginStatus][success]")
 	})
 	// example: 兔兔 歌单列表
 	zero.OnRegex(`^歌单列表$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
 		PlayList(ctx)
-		logrus.Infof("[netease][PlayList][Success]")
+		logrus.Infof("[netease][PlayList][success]")
 	})
 
 	// OnlyGroup Use the context created in login
@@ -112,14 +111,15 @@ func init() {
 		err := SwitchPlay(ctx)
 		if err != nil {
 			logrus.Errorf("[netease][SwitchPlay] %s", err)
+			ctx.Send(message.Text(fmt.Sprintf("[netease][SwitchPlay] %s", err)))
 		} else {
-			logrus.Infof("[netease][SwitchPlay][Success]")
+			logrus.Infof("[netease][SwitchPlay][success]")
 		}
 	})
 	// example: 兔兔 歌单信息
 	zero.OnRegex(`^歌曲列表$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		PlayStatus(ctx)
-		logrus.Infof("[netease][PlayStatus][Success]")
+		TrackList(ctx)
+		logrus.Infof("[netease][PlayStatus][success]")
 	})
 
 	// OnlyGroup Use the context created in login
@@ -129,8 +129,9 @@ func init() {
 		err := StartGuess(ctx)
 		if err != nil {
 			logrus.Errorf("[netease][StartGuess] %s", err)
+			ctx.Send(message.Text(fmt.Sprintf("[netease][StartGuess] %s", err)))
 		} else {
-			logrus.Infof("[netease][StartGuess][Success]")
+			logrus.Infof("[netease][StartGuess][success]")
 		}
 	})
 	// example: 兔兔 提示
@@ -138,8 +139,9 @@ func init() {
 		err := Tip(ctx)
 		if err != nil {
 			logrus.Errorf("[netease][Tip] %s", err)
+			ctx.Send(message.Text(fmt.Sprintf("[netease][Tip] %s", err)))
 		} else {
-			logrus.Infof("[netease][Tip][Success]")
+			logrus.Infof("[netease][Tip][success]")
 		}
 	})
 	// example: 兔兔 答案
@@ -147,8 +149,9 @@ func init() {
 		err := Answer(ctx)
 		if err != nil {
 			logrus.Errorf("[netease][Answer] %s", err)
+			ctx.Send(message.Text(fmt.Sprintf("[netease][Answer] %s", err)))
 		} else {
-			logrus.Infof("[netease][Answer][Success]")
+			logrus.Infof("[netease][Answer][success]")
 		}
 	})
 	// example: 兔兔 猜 离去之原
@@ -156,42 +159,42 @@ func init() {
 		err := Guess(ctx)
 		if err != nil {
 			logrus.Errorf("[netease][Guess] %s", err)
+			ctx.Send(message.Text(fmt.Sprintf("[netease][Guess] %s", err)))
 		} else {
-			logrus.Infof("[netease][Guess][Success]")
+			logrus.Infof("[netease][Guess][success]")
 		}
 	})
 }
 
-// InitAndMigrate do some initialization
-func InitAndMigrate() error {
-	var err error
-
-	contexts = make(map[int64]*Context)
-	// plugin path init
-	cwd, err = os.Getwd()
+func Initialize() error {
+	cwd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	database = filepath.Join(cwd, "..", "data", "database", "localSqlite3")
+
 	cache = filepath.Join(cwd, "..", "data", "cache", "netease")
-
-	// database connect and migrate
-	db, err = localSqlite3.Init(filepath.Join(database, "netease.db"))
+	err = os.MkdirAll(cache, 0666)
 	if err != nil {
 		return err
 	}
+
+	db, err = localSqlite3.Init("netease.db")
+	if err != nil {
+		return err
+	}
+
 	err = db.AutoMigrate(&model.Account{})
 	if err != nil {
 		return err
 	}
+
+	contexts = make(map[int64]*Context)
 
 	return nil
 }
 
 // Register example: 注册 AliceBot 18852000505 dongwoo1217
 func Register(ctx *zero.Ctx) error {
-	var err error
-
 	args := ctx.State["regex_matched"].([]string)
 
 	account := model.Account{
@@ -201,26 +204,18 @@ func Register(ctx *zero.Ctx) error {
 		Password: args[3],
 	}
 
-	err = account.CreateOrUpdate(db)
+	err := account.CreateOrUpdate(db)
 	if err != nil {
-		ctx.Send(message.Text("注册失败"))
 		return err
 	}
 
-	ctx.Send(message.Text(
-		fmt.Sprintf(
-			"账号 %s 注册成功",
-			account.NickName,
-		),
-	))
+	ctx.Send(message.Text("注册成功"))
 
 	return nil
 }
 
 // Revoke example: 注销 AliceBot
 func Revoke(ctx *zero.Ctx) error {
-	var err error
-
 	args := ctx.State["regex_matched"].([]string)
 
 	account := model.Account{
@@ -228,41 +223,29 @@ func Revoke(ctx *zero.Ctx) error {
 		NickName: args[1],
 	}
 
-	err = account.Delete(db)
+	err := account.Delete(db)
 	if err != nil {
-		ctx.Send(message.Text("注销失败"))
 		return err
 	}
 
-	ctx.Send(message.Text(
-		fmt.Sprintf(
-			"账号 %s 注销成功",
-			account.NickName,
-		),
-	))
+	ctx.Send(message.Text("注销成功"))
 
 	return nil
 }
 
 // AccountList example: 账号列表
 func AccountList(ctx *zero.Ctx) error {
-	var err error
-
 	accounts, err := (&model.Account{
 		UserID: ctx.Event.UserID,
 	}).ReadAll(db)
-
 	if err != nil {
-		ctx.Send(message.Text("获取账号列表失败"))
 		return err
 	}
 
 	var msg []message.MessageSegment
 	msg = append(msg, message.Text("### 账号列表 ###"))
 	for index, account := range accounts {
-		msg = append(msg, message.Text(
-			fmt.Sprintf("\n[%v] %s", index+1, account.NickName),
-		))
+		msg = append(msg, message.Text(fmt.Sprintf("\n[%v] %s", index+1, account.NickName)))
 	}
 
 	ctx.Send((message.Message)(msg))
@@ -272,8 +255,6 @@ func AccountList(ctx *zero.Ctx) error {
 
 // Login example: 兔兔 登录 AliceRemake
 func Login(ctx *zero.Ctx) error {
-	var err error
-
 	args := ctx.State["regex_matched"].([]string)
 
 	account := model.Account{
@@ -281,20 +262,18 @@ func Login(ctx *zero.Ctx) error {
 		NickName: args[1],
 	}
 
-	err = account.Read(db)
+	err := account.Read(db)
 	if err != nil {
-		ctx.Send(message.Text("获取账号信息失败"))
 		return err
 	}
 
 	session, err := account.Login()
 	if err != nil {
-		ctx.Send(message.Text("登录接口调用失败"))
 		return err
 	}
+
 	playlist, err := session.GetPlayList()
 	if err != nil {
-		ctx.Send(message.Text("获取歌单列表失败"))
 		return err
 	}
 
@@ -308,12 +287,7 @@ func Login(ctx *zero.Ctx) error {
 		segmentLen:  3,
 	}
 
-	ctx.Send(message.Text(
-		fmt.Sprintf(
-			"%s 登录成功",
-			account.NickName,
-		),
-	))
+	ctx.Send(message.Text("登录成功"))
 
 	return nil
 }
@@ -332,10 +306,7 @@ func LoginStatus(ctx *zero.Ctx) {
 	}
 
 	ctx.Send(message.Text(
-		fmt.Sprintf(
-			"已登陆 %s",
-			contexts[ctx.Event.GroupID].session.NickName,
-		),
+		fmt.Sprintf("已登陆 %s", contexts[ctx.Event.GroupID].session.NickName),
 	))
 }
 
@@ -349,9 +320,7 @@ func PlayList(ctx *zero.Ctx) {
 	var msg []message.MessageSegment
 	msg = append(msg, message.Text("### 歌单列表 ###"))
 	for index, play := range contexts[ctx.Event.GroupID].playlist {
-		msg = append(msg, message.Text(
-			fmt.Sprintf("\n[%v] %s", index+1, play.Name),
-		))
+		msg = append(msg, message.Text(fmt.Sprintf("\n[%v] %s", index+1, play.Name)))
 	}
 
 	ctx.Send((message.Message)(msg))
@@ -364,8 +333,6 @@ func SwitchPlay(ctx *zero.Ctx) error {
 		return nil
 	}
 
-	var err error
-
 	args := ctx.State["regex_matched"].([]string)
 
 	for _, play := range contexts[ctx.Event.GroupID].playlist {
@@ -375,34 +342,33 @@ func SwitchPlay(ctx *zero.Ctx) error {
 		}
 	}
 
-	logrus.Println(contexts[ctx.Event.GroupID].currPlay)
-
+	var err error
 	contexts[ctx.Event.GroupID].tracklist, err = contexts[ctx.Event.GroupID].session.GetTrackList(contexts[ctx.Event.GroupID].currPlay)
 	if err != nil {
-		ctx.Send(message.Text("获取歌单歌曲失败"))
 		return err
 	}
 
-	ctx.Send(fmt.Sprintf("歌单已切换为 %s ", contexts[ctx.Event.GroupID].currPlay.Name))
+	ctx.Send(fmt.Sprintf("切换成功"))
+
 	return nil
 }
 
-// PlayStatus example: 兔兔 歌曲列表
-func PlayStatus(ctx *zero.Ctx) {
+// TrackList example: 兔兔 歌曲列表
+func TrackList(ctx *zero.Ctx) {
 	if contexts[ctx.Event.GroupID] == nil {
 		ctx.Send(message.Text("请先登录"))
+		return
 	}
+
 	if contexts[ctx.Event.GroupID].currPlay == nil {
-		ctx.Send(message.Text("请先选择歌单"))
+		ctx.Send(message.Text("暂未选择歌单"))
 		return
 	}
 
 	var msg []message.MessageSegment
 	msg = append(msg, message.Text("### 歌曲列表 ###"))
 	for index, track := range contexts[ctx.Event.GroupID].tracklist {
-		msg = append(msg, message.Text(
-			fmt.Sprintf("\n[%v]%s", index+1, track.Name),
-		))
+		msg = append(msg, message.Text(fmt.Sprintf("\n[%v] %s", index+1, track.Name)))
 	}
 
 	ctx.Send((message.Message)(msg))
@@ -414,6 +380,7 @@ func StartGuess(ctx *zero.Ctx) error {
 		ctx.Send(message.Text("请先登录"))
 		return nil
 	}
+
 	if contexts[ctx.Event.GroupID].tracklist == nil {
 		ctx.Send(message.Text("请先选择歌单"))
 		return nil
@@ -421,45 +388,43 @@ func StartGuess(ctx *zero.Ctx) error {
 
 	contexts[ctx.Event.GroupID].nextSegment = 1
 
-	rand.Seed(time.Now().Unix())
-
 	dice := util.GetDice(len(contexts[ctx.Event.GroupID].tracklist))
 
 	contexts[ctx.Event.GroupID].currTrack = &contexts[ctx.Event.GroupID].tracklist[dice]
 
 	tracklistDir := filepath.Join(cache, "tracklist")
-	guessingDir := filepath.Join(cache, "guessing", fmt.Sprintf("%v", ctx.Event.GroupID))
-
-	err := os.MkdirAll(guessingDir, 0666)
+	err := os.MkdirAll(tracklistDir, 0666)
 	if err != nil {
-		ctx.Send(message.Text("创建本地文件失败"))
+		return err
+	}
+
+	guessingDir := filepath.Join(cache, "guessing", fmt.Sprintf("%v", ctx.Event.GroupID))
+	err = os.MkdirAll(guessingDir, 0666)
+	if err != nil {
 		return err
 	}
 
 	task, err := contexts[ctx.Event.GroupID].session.GetTask(contexts[ctx.Event.GroupID].currTrack)
 	if err != nil {
-		ctx.Send(message.Text("获取歌曲url失败"))
 		return err
 	}
 
 	_, err = os.Stat(filepath.Join(tracklistDir, fmt.Sprintf("%s.%s", task.Name, task.Type)))
 	if os.IsNotExist(err) {
-		logrus.Infof("下载 %s", task.Name)
 		err = contexts[ctx.Event.GroupID].session.DownloadTask(task, tracklistDir)
 		if err != nil {
-			ctx.Send(message.Text("下载失败"))
 			return err
 		}
 	}
+
+	var cmdout bytes.Buffer
+	var cmderr bytes.Buffer
 
 	cmd := exec.Command(
 		"ffprobe",
 		"-show_format",
 		filepath.Join(tracklistDir, fmt.Sprintf("%s.%s", task.Name, task.Type)),
 	)
-
-	var cmdout bytes.Buffer
-	var cmderr bytes.Buffer
 
 	cmd.Stdout = &cmdout
 	cmd.Stderr = &cmderr
@@ -512,11 +477,14 @@ func StartGuess(ctx *zero.Ctx) error {
 func Tip(ctx *zero.Ctx) error {
 	if contexts[ctx.Event.GroupID] == nil {
 		ctx.Send(message.Text("请先登录"))
+		return nil
 	}
+
 	if contexts[ctx.Event.GroupID].currTrack == nil {
 		ctx.Send(message.Text("请先开始猜歌"))
 		return nil
 	}
+
 	if contexts[ctx.Event.GroupID].nextSegment > 3 {
 		ctx.Send(message.Text("提示次数已用完"))
 		return nil
@@ -538,7 +506,9 @@ func Tip(ctx *zero.Ctx) error {
 func Answer(ctx *zero.Ctx) error {
 	if contexts[ctx.Event.GroupID] == nil {
 		ctx.Send(message.Text("请先登录"))
+		return nil
 	}
+
 	if contexts[ctx.Event.GroupID].currTrack == nil {
 		ctx.Send(message.Text("请先开始猜歌"))
 		return nil
@@ -556,7 +526,9 @@ func Answer(ctx *zero.Ctx) error {
 func Guess(ctx *zero.Ctx) error {
 	if contexts[ctx.Event.GroupID] == nil {
 		ctx.Send(message.Text("请先登录"))
+		return nil
 	}
+
 	if contexts[ctx.Event.GroupID].currTrack == nil {
 		ctx.Send(message.Text("请先开始猜歌"))
 		return nil
@@ -570,7 +542,6 @@ func Guess(ctx *zero.Ctx) error {
 		contexts[ctx.Event.GroupID].nextSegment = 1
 		return nil
 	}
-
 	for _, tn := range contexts[ctx.Event.GroupID].currTrack.Tns {
 		if GuessCheck(args[1], tn) {
 			ctx.Send("おめでとう")
