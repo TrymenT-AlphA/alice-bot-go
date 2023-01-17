@@ -21,7 +21,7 @@ var (
 )
 
 func init() {
-	alice.Init.Register(func() {
+	alice.Initializer.Register(func() {
 		fn := "initialize"
 		alice.CommandWapper(nil, true, plugin, fn, func() error {
 			return initialize(initComplete)

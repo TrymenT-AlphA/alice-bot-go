@@ -2,7 +2,9 @@ package netease
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -11,13 +13,16 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	zero "github.com/wdvxdr1123/ZeroBot"
 	"github.com/wdvxdr1123/ZeroBot/message"
+	"gopkg.in/yaml.v2"
 	"gorm.io/gorm"
 
 	"alice-bot-go/src/core/alice"
 	"alice-bot-go/src/core/config"
 	"alice-bot-go/src/core/database/localSqlite3"
+	"alice-bot-go/src/core/util"
 	"alice-bot-go/src/plugin/netease/model"
 )
 
@@ -40,14 +45,14 @@ var (
 )
 
 func init() {
-	alice.Init.Register(func() {
+	alice.Initializer.Register(func() {
 		fn := "initialize"
 		alice.CommandWapper(nil, true, plugin, fn, func() error {
 			return initialize()
 		})
 	}, 1)
 	// usage: 注册 <Account.NickName> <Account.Phone> <Account.Password>
-	// example: 注册 AliceRemake <Account.Phone> <Account.Password>
+	// example: 注册 AliceRemake *******9590 *************
 	zero.OnRegex(`^注册 (.+) (.+) (.+)$`, zero.OnlyToMe, zero.OnlyPrivate).SetBlock(true).Handle(func(ctx *zero.Ctx) {
 		fn := "register"
 		alice.CommandWapper(ctx, true, plugin, fn, func() error {
@@ -142,7 +147,7 @@ func init() {
 		})
 	})
 	// usage: <NickName> 猜 <Track.Name/Track.Tns[i]>
-	// example: 兔兔 猜 离去之原
+	// example: 兔兔 猜 爱言叶III/爱的话语
 	zero.OnRegex(`^猜 (.+)$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
 		fn := "guess"
 		alice.CommandWapper(ctx, true, plugin, fn, func() error {
@@ -163,6 +168,47 @@ func initialize() error {
 	}
 	if err := db.AutoMigrate(&model.Account{}); err != nil {
 		return err
+	}
+	if err := initNeteaseYml(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func initNeteaseYml() error {
+	fn := "initNeteaseYml"
+	neteaseYml := filepath.Join(config.Global.ConfigDir, fmt.Sprintf("%s.yml", plugin))
+	if util.IsNotExist(neteaseYml) {
+		logrus.Infof("[%s][%s] %s", plugin, fn, fmt.Sprintf("no `%s.yml` was found, start configuring...", plugin))
+		for { // config.Github.Token
+			fmt.Printf("[%s][%s] %s", plugin, fn, fmt.Sprintf("enter %s:", "config.Netease.Server"))
+			n, err := fmt.Scan(&config.Netease.Server)
+			if n != 1 || err != nil {
+				if errors.Is(err, io.EOF) {
+					os.Exit(0)
+				}
+				fmt.Printf("[%s][%s] %s", plugin, fn, fmt.Sprintf("input err: %s, try again.\n", err))
+				continue
+			}
+			break
+		}
+		data, err := yaml.Marshal(&config.Netease)
+		if err != nil {
+			return err
+		}
+		if err = util.Write(neteaseYml, data); err != nil {
+			return err
+		}
+		logrus.Infof("[%s][%s] %s", plugin, fn, "configure complete!")
+	} else {
+		logrus.Infof("[%s][%s] %s", plugin, fn, fmt.Sprintf("found `%s.yml`", plugin))
+		data, err := os.ReadFile(neteaseYml)
+		if err != nil {
+			return err
+		}
+		if err = yaml.Unmarshal(data, &config.Netease); err != nil {
+			return err
+		}
 	}
 	return nil
 }

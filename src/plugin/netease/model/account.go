@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"alice-bot-go/src/core/alice"
+	"alice-bot-go/src/core/config"
 )
 
 type Account struct {
@@ -85,6 +86,7 @@ func (account *Account) Login() (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
+	api.UrlParams = []interface{}{config.Netease.Server}
 	api.Params = map[string]interface{}{
 		"phone":    account.Phone,
 		"password": account.Password,

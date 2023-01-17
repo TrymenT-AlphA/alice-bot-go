@@ -29,14 +29,14 @@ var (
 )
 
 func init() {
-	alice.Init.Register(func() {
+	alice.Initializer.Register(func() {
 		fn := "initialize"
 		alice.CommandWapper(nil, true, plugin, fn, func() error {
 			return initialize(initComplete)
 		})
 	}, 1)
 	// usage: <NickName> 跟踪 <Repo.Owner> <Repo.Name> <local>
-	// example: 兔兔 跟踪 Kengxxiao ArknightsGameData <local>
+	// example: 兔兔 跟踪 Kengxxiao ArknightsGameData ./gamedata
 	zero.OnRegex(`^跟踪 (.+) (.+) (.+)$`, zero.OnlyToMe, zero.OnlyGroup, zero.SuperUserPermission).SetBlock(true).Handle(func(ctx *zero.Ctx) {
 		fn := "follow"
 		alice.CommandWapper(ctx, true, plugin, fn, func() error {

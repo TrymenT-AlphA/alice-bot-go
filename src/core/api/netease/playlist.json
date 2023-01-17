@@ -1,8 +1,8 @@
 {
   "detail":{
-    "url": "http://139.9.51.153:3002/playlist/detail",
-    "url_format": "",
-    "url_params": null,
+    "url": "",
+    "url_format": "%s/playlist/detail",
+    "url_params": ["Server"],
     "method": "GET",
     "params": {
       "id": "歌单id"

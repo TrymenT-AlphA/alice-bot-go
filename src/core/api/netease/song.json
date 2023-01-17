@@ -1,8 +1,8 @@
 {
   "url":{
-    "url": "http://139.9.51.153:3002/song/url",
-    "url_format": "",
-    "url_params": null,
+    "url": "",
+    "url_format": "%s/song/url",
+    "url_params": ["Server"],
     "method": "GET",
     "params": {
       "id": "歌曲id",

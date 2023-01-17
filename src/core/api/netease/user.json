@@ -1,8 +1,8 @@
 {
   "playlist":{
-    "url": "http://139.9.51.153:3002/user/playlist",
-    "url_format": "",
-    "url_params": null,
+    "url": "",
+    "url_format": "%s/user/playlist",
+    "url_params": ["Server"],
     "method": "GET",
     "params": {
       "uid": "用户id"

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
-	easy "github.com/t-tomalak/logrus-easy-formatter"
 	zero "github.com/wdvxdr1123/ZeroBot"
 	"github.com/wdvxdr1123/ZeroBot/driver"
 	"gopkg.in/yaml.v2"
@@ -19,27 +18,25 @@ import (
 
 	_ "alice-bot-go/src/plugin/bilibili"
 	_ "alice-bot-go/src/plugin/github"
-	_ "alice-bot-go/src/plugin/heartbeat"
 	_ "alice-bot-go/src/plugin/meta"
 	_ "alice-bot-go/src/plugin/netease"
 )
 
 var (
-	initComplete = make(chan bool, 1)
-	plugin       = "main"
+	plugin = "main"
 )
 
 func init() {
-	alice.Init.Register(func() {
+	alice.Initializer.Register(func() {
 		fn := "initialize"
 		alice.CommandWapper(nil, true, plugin, fn, func() error {
-			return initialize(initComplete)
+			return initialize()
 		})
 	}, 0)
 }
 
 func main() {
-	alice.Init.Initialize()
+	alice.Initializer.Initialize()
 	zero.RunAndBlock(&zero.Config{
 		NickName:      config.Bot.NickName,
 		CommandPrefix: config.Bot.CommandPrefix,
@@ -59,7 +56,7 @@ func main() {
 	}, nil)
 }
 
-func initialize(initComplete chan bool) error {
+func initialize() error {
 	if err := initLogrus(); err != nil {
 		return err
 	}
@@ -69,21 +66,15 @@ func initialize(initComplete chan bool) error {
 	if err := initBot(); err != nil {
 		return err
 	}
-	initComplete <- true
 	return nil
 }
 
-// initLogrus set logrus format and level
 func initLogrus() error {
-	logrus.SetFormatter(&easy.Formatter{
-		TimestampFormat: "2006-01-02 15:04:05",
-		LogFormat:       "[%time%][%lvl%][alice-bot]%msg% \n",
-	})
+	logrus.SetFormatter(&alice.Formatter{})
 	logrus.SetLevel(logrus.InfoLevel)
 	return nil
 }
 
-// initGlobal make dirs: `data/cache` `data/config` `data/database` and set config.Global
 func initGlobal() error {
 	var err error
 	config.Global.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36 Edg/108.0.1462.54"
@@ -116,7 +107,6 @@ func initGlobal() error {
 	return nil
 }
 
-// initBot read config and set config.Bot, if no config file, auto generate
 func initBot() error {
 	botYml := filepath.Join(config.Global.ConfigDir, "bot.yml")
 	if util.IsNotExist(botYml) {

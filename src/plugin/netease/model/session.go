@@ -8,6 +8,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	"alice-bot-go/src/core/alice"
+	"alice-bot-go/src/core/config"
 )
 
 type Session struct {
@@ -25,6 +26,7 @@ func (session *Session) GetPlayList() ([]Play, error) {
 	if err != nil {
 		return nil, err
 	}
+	api.UrlParams = []interface{}{config.Netease.Server}
 	api.Params = map[string]interface{}{
 		"uid": session.UID,
 	}
@@ -54,6 +56,7 @@ func (session *Session) GetTrackList(play *Play) ([]Track, error) {
 	if err != nil {
 		return nil, err
 	}
+	api.UrlParams = []interface{}{config.Netease.Server}
 	api.Params = map[string]interface{}{
 		"id": play.PID,
 	}
@@ -89,6 +92,7 @@ func (session *Session) GetTask(track *Track) (*Task, error) {
 	if err != nil {
 		return nil, err
 	}
+	api.UrlParams = []interface{}{config.Netease.Server}
 	api.Params = map[string]interface{}{
 		"id": track.TID,
 	}
@@ -123,6 +127,7 @@ func (session *Session) DownloadTrack(track *Track, dir string) error {
 	if err != nil {
 		return err
 	}
+	api.UrlParams = []interface{}{config.Netease.Server}
 	api.Params = map[string]interface{}{
 		"id": track.TID,
 		"br": 128000,
