@@ -102,12 +102,12 @@ func (repo *Repo) Pull(local string) error {
 }
 
 func (repo *Repo) CloneOrPull(local string) error {
-	if util.IsExist(local) {
-		if err := repo.Pull(local); err != nil {
+	if util.IsNotExist(local) {
+		if err := repo.Clone(local); err != nil {
 			return err
 		}
 	} else {
-		if err := repo.Clone(local); err != nil {
+		if err := repo.Pull(local); err != nil {
 			return err
 		}
 	}
