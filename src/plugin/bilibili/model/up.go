@@ -1,18 +1,20 @@
 package model
 
 import (
-	"alice-bot-go/src/types"
-	"github.com/tidwall/gjson"
 	"net/http"
+
+	"github.com/tidwall/gjson"
+
+	"alice-bot-go/src/core/alice"
 )
 
 type Up struct {
-	UID     int64 `gorm:"primarykey"`
-	NicName string
+	UID      int64 `gorm:"primarykey"`
+	NickName string
 }
 
 func (up *Up) GetLatestDynamic() (*Dynamic, error) {
-	bilibiliAPI, err := types.NewAPI(
+	api, err := alice.NewAPI(
 		"bilibili",
 		"user",
 		"info.dynamic",
@@ -20,29 +22,21 @@ func (up *Up) GetLatestDynamic() (*Dynamic, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	bilibiliAPI.Params = make(map[string]interface{})
-	bilibiliAPI.Params["host_uid"] = up.UID
-	bilibiliAPI.Params["offset_dynamic_id"] = 0
-	bilibiliAPI.Params["need_top"] = false
-
-	data, err := bilibiliAPI.DoRequest(&http.Client{})
+	api.Params = map[string]interface{}{
+		"host_uid":          up.UID,
+		"offset_dynamic_id": 0,
+		"need_top":          false,
+	}
+	data, err := api.DoRequest(&http.Client{})
 	if err != nil {
 		return nil, err
 	}
-
-	card := gjson.GetBytes(data, "data.cards.0.card").String()
-	dynamic := &Dynamic{
-		Description: gjson.Get(card, "item.description").String(),
-		Pictures:    nil,
-		Timestamp:   gjson.GetBytes(data, "data.cards.0.desc.timestamp").Int(),
-	}
-	gjson.Get(card, "item.pictures.#.img_src").ForEach(
-		func(key, value gjson.Result) bool {
-			dynamic.Pictures = append(dynamic.Pictures, value.String())
-			return true
-		},
+	d := gjson.GetBytes(data, "data.cards.0")
+	card := d.Get("card").String()
+	dynamic := NewDynamic(
+		card,
+		d.Get("desc.type").Int(),
+		d.Get("desc.timestamp").Int(),
 	)
-
 	return dynamic, nil
 }

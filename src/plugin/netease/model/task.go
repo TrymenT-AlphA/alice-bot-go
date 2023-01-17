@@ -23,33 +23,24 @@ func (task *Task) Download(dir string) error {
 	if err != nil {
 		return err
 	}
-
 	response, err := http.Get(task.Url)
 	if err != nil {
 		return err
 	}
-
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
 		return err
 	}
-
-	err = response.Body.Close()
-	if err != nil {
+	if err = response.Body.Close(); err != nil {
 		return err
 	}
-
 	writer := bufio.NewWriter(out)
-
 	_, err = writer.Write(data)
 	if err != nil {
 		return err
 	}
-
-	err = writer.Flush()
-	if err != nil {
+	if err = writer.Flush(); err != nil {
 		return err
 	}
-
 	return nil
 }

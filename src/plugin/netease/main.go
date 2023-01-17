@@ -1,21 +1,24 @@
 package netease
 
 import (
-	"alice-bot-go/src/database/localSqlite3"
-	"alice-bot-go/src/plugin/netease/model"
-	"alice-bot-go/src/util"
 	"bytes"
 	"fmt"
-	"github.com/sirupsen/logrus"
-	zero "github.com/wdvxdr1123/ZeroBot"
-	"github.com/wdvxdr1123/ZeroBot/message"
-	"gorm.io/gorm"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	zero "github.com/wdvxdr1123/ZeroBot"
+	"github.com/wdvxdr1123/ZeroBot/message"
+	"gorm.io/gorm"
+
+	"alice-bot-go/src/core/alice"
+	"alice-bot-go/src/core/config"
+	"alice-bot-go/src/core/database/localSqlite3"
+	"alice-bot-go/src/plugin/netease/model"
 )
 
 // Context guess music context, each one for each group
@@ -30,253 +33,201 @@ type Context struct {
 }
 
 var (
+	plugin   = "netease"
 	db       *gorm.DB
 	cache    string
-	contexts map[int64]*Context
+	contexts = make(map[int64]*Context)
 )
 
 func init() {
-	// Initialize
-	err := Initialize()
-	if err != nil {
-		logrus.Fatalf("[netease][Initialize] %s", err)
-	} else {
-		logrus.Infof("[netease][Initialize][success]")
-	}
-
-	// OnlyPrivate Context Free
-	// example: 注册 AliceRemake <Phone> <Password>
+	alice.Init.Register(func() {
+		fn := "initialize"
+		alice.CommandWapper(nil, true, plugin, fn, func() error {
+			return initialize()
+		})
+	}, 1)
+	// usage: 注册 <Account.NickName> <Account.Phone> <Account.Password>
+	// example: 注册 AliceRemake <Account.Phone> <Account.Password>
 	zero.OnRegex(`^注册 (.+) (.+) (.+)$`, zero.OnlyToMe, zero.OnlyPrivate).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		err := Register(ctx)
-		if err != nil {
-			logrus.Errorf("[netease][Register] %s", err)
-			ctx.Send(message.Text(fmt.Sprintf("[netease][Register] %s", err)))
-		} else {
-			logrus.Infof("[netease][Register][success]")
-		}
+		fn := "register"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return register(ctx, db)
+		})
 	})
+	// usage: 注销 <Account.NickName>
 	// example: 注销 AliceRemake
 	zero.OnRegex(`^注销 (.+)$`, zero.OnlyToMe, zero.OnlyPrivate).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		err := Revoke(ctx)
-		if err != nil {
-			logrus.Errorf("[netease][Revoke] %s", err)
-			ctx.Send(message.Text(fmt.Sprintf("[netease][Revoke] %s", err)))
-		} else {
-			logrus.Infof("[netease][Revoke][success]")
-		}
+		fn := "revoke"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return revoke(ctx, db)
+		})
 	})
-	// example: 账号列表
+	// usage/example: 账号列表
 	zero.OnRegex(`^账号列表$`, zero.OnlyToMe, zero.OnlyPrivate).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		err := AccountList(ctx)
-		if err != nil {
-			logrus.Errorf("[netease][AccountList] %s", err)
-			ctx.Send(message.Text(fmt.Sprintf("[netease][AccountList] %s", err)))
-		} else {
-			logrus.Infof("[netease][AccountList][success]")
-		}
+		fn := "accountList"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return accountList(ctx, db)
+		})
 	})
-
-	// OnlyGroup Create a new context for a group after login
-	// in the new context, we should have `session` and `playlist`
+	// usage: <NickName> 登录 <Account.NickName>
 	// example: 兔兔 登录 AliceRemake
 	zero.OnRegex(`^登录 (.+)$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		err := Login(ctx)
-		if err != nil {
-			logrus.Errorf("[netease][Login] %s", err)
-			ctx.Send(message.Text(fmt.Sprintf("[netease][Login] %s", err)))
-		} else {
-			logrus.Infof("[netease][Login][success]")
-		}
+		fn := "login"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return login(ctx, db)
+		})
 	})
+	// usage: <NickName> 登出
 	// example: 兔兔 登出
 	zero.OnRegex(`^登出$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		Logout(ctx)
-		logrus.Infof("[netease][Logout][success]")
+		fn := "logout"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return logout(ctx)
+		})
 	})
+	// usage: <NickName> 登录信息
 	// example: 兔兔 登录信息
 	zero.OnRegex(`^登录信息$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		LoginStatus(ctx)
-		logrus.Infof("[netease][LoginStatus][success]")
+		fn := "loginStatus"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return loginStatus(ctx)
+		})
 	})
+	// usage: <NickName> 歌单列表
 	// example: 兔兔 歌单列表
 	zero.OnRegex(`^歌单列表$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		PlayList(ctx)
-		logrus.Infof("[netease][PlayList][success]")
+		fn := "playList"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return playList(ctx)
+		})
 	})
-
-	// OnlyGroup Use the context created in login
-	// after `SwitchPlay`, we should have `currPlay` and `tracklist` in the context
+	// usage: <NickName> 切换歌单  <Play.Name>
 	// example: 兔兔 切换歌单  测试歌单
 	zero.OnRegex(`^切换歌单 (.+)$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		err := SwitchPlay(ctx)
-		if err != nil {
-			logrus.Errorf("[netease][SwitchPlay] %s", err)
-			ctx.Send(message.Text(fmt.Sprintf("[netease][SwitchPlay] %s", err)))
-		} else {
-			logrus.Infof("[netease][SwitchPlay][success]")
-		}
+		fn := "switchPlay"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return switchPlay(ctx)
+		})
 	})
+	// usage: <NickName> 歌单信息
 	// example: 兔兔 歌单信息
 	zero.OnRegex(`^歌曲列表$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		TrackList(ctx)
-		logrus.Infof("[netease][PlayStatus][success]")
+		fn := "trackList"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return trackList(ctx)
+		})
 	})
-
-	// OnlyGroup Use the context created in login
-	// after `StartGuess`, we should have `currTrack`
+	// usage: <NickName> 开始猜歌
 	// example: 兔兔 开始猜歌
 	zero.OnRegex(`^开始猜歌$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		err := StartGuess(ctx)
-		if err != nil {
-			logrus.Errorf("[netease][StartGuess] %s", err)
-			ctx.Send(message.Text(fmt.Sprintf("[netease][StartGuess] %s", err)))
-		} else {
-			logrus.Infof("[netease][StartGuess][success]")
-		}
+		fn := "startGuess"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return startGuess(ctx)
+		})
 	})
+	// usage: <NickName> 提示
 	// example: 兔兔 提示
 	zero.OnRegex(`^提示$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		err := Tip(ctx)
-		if err != nil {
-			logrus.Errorf("[netease][Tip] %s", err)
-			ctx.Send(message.Text(fmt.Sprintf("[netease][Tip] %s", err)))
-		} else {
-			logrus.Infof("[netease][Tip][success]")
-		}
+		fn := "tip"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return tip(ctx)
+		})
 	})
+	// usage: <NickName> 答案
 	// example: 兔兔 答案
 	zero.OnRegex(`^答案$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		err := Answer(ctx)
-		if err != nil {
-			logrus.Errorf("[netease][Answer] %s", err)
-			ctx.Send(message.Text(fmt.Sprintf("[netease][Answer] %s", err)))
-		} else {
-			logrus.Infof("[netease][Answer][success]")
-		}
+		fn := "answer"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return answer(ctx)
+		})
 	})
+	// usage: <NickName> 猜 <Track.Name/Track.Tns[i]>
 	// example: 兔兔 猜 离去之原
 	zero.OnRegex(`^猜 (.+)$`, zero.OnlyToMe, zero.OnlyGroup).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		err := Guess(ctx)
-		if err != nil {
-			logrus.Errorf("[netease][Guess] %s", err)
-			ctx.Send(message.Text(fmt.Sprintf("[netease][Guess] %s", err)))
-		} else {
-			logrus.Infof("[netease][Guess][success]")
-		}
+		fn := "guess"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return guess(ctx)
+		})
 	})
 }
 
-func Initialize() error {
-	cwd, err := os.Getwd()
+func initialize() error {
+	cache = filepath.Join(config.Global.CacheDir, plugin)
+	if err := os.MkdirAll(cache, 0666); err != nil {
+		return err
+	}
+	var err error
+	db, err = localSqlite3.Init(fmt.Sprintf("%s.db", plugin))
 	if err != nil {
 		return err
 	}
-
-	cache = filepath.Join(cwd, "..", "data", "cache", "netease")
-	err = os.MkdirAll(cache, 0666)
-	if err != nil {
+	if err := db.AutoMigrate(&model.Account{}); err != nil {
 		return err
 	}
-
-	db, err = localSqlite3.Init("netease.db")
-	if err != nil {
-		return err
-	}
-
-	err = db.AutoMigrate(&model.Account{})
-	if err != nil {
-		return err
-	}
-
-	contexts = make(map[int64]*Context)
-
 	return nil
 }
 
-// Register example: 注册 AliceBot 18852000505 dongwoo1217
-func Register(ctx *zero.Ctx) error {
+func register(ctx *zero.Ctx, db *gorm.DB) error {
 	args := ctx.State["regex_matched"].([]string)
-
 	account := model.Account{
 		UserID:   ctx.Event.UserID,
 		NickName: args[1],
 		Phone:    args[2],
 		Password: args[3],
 	}
-
-	err := account.CreateOrUpdate(db)
-	if err != nil {
+	if err := account.CreateOrUpdate(db); err != nil {
 		return err
 	}
-
 	ctx.Send(message.Text("注册成功"))
-
 	return nil
 }
 
-// Revoke example: 注销 AliceBot
-func Revoke(ctx *zero.Ctx) error {
+func revoke(ctx *zero.Ctx, db *gorm.DB) error {
 	args := ctx.State["regex_matched"].([]string)
-
 	account := model.Account{
 		UserID:   ctx.Event.UserID,
 		NickName: args[1],
 	}
-
-	err := account.Delete(db)
-	if err != nil {
+	if err := account.Delete(db); err != nil {
 		return err
 	}
-
 	ctx.Send(message.Text("注销成功"))
-
 	return nil
 }
 
-// AccountList example: 账号列表
-func AccountList(ctx *zero.Ctx) error {
+func accountList(ctx *zero.Ctx, db *gorm.DB) error {
 	accounts, err := (&model.Account{
 		UserID: ctx.Event.UserID,
 	}).ReadAll(db)
 	if err != nil {
 		return err
 	}
-
 	var msg []message.MessageSegment
-	msg = append(msg, message.Text("### 账号列表 ###"))
+	msg = append(msg, message.Text("#### 账号列表 ####"))
 	for index, account := range accounts {
 		msg = append(msg, message.Text(fmt.Sprintf("\n[%v] %s", index+1, account.NickName)))
 	}
-
 	ctx.Send((message.Message)(msg))
-
 	return nil
 }
 
-// Login example: 兔兔 登录 AliceRemake
-func Login(ctx *zero.Ctx) error {
+func login(ctx *zero.Ctx, db *gorm.DB) error {
 	args := ctx.State["regex_matched"].([]string)
-
 	account := model.Account{
 		UserID:   ctx.Event.UserID,
 		NickName: args[1],
 	}
-
-	err := account.Read(db)
-	if err != nil {
+	if err := account.Read(db); err != nil {
 		return err
 	}
-
 	session, err := account.Login()
 	if err != nil {
 		return err
 	}
-
 	playlist, err := session.GetPlayList()
 	if err != nil {
 		return err
 	}
-
 	contexts[ctx.Event.GroupID] = &Context{
 		session:     session,
 		playlist:    playlist,
@@ -286,129 +237,104 @@ func Login(ctx *zero.Ctx) error {
 		nextSegment: 1,
 		segmentLen:  3,
 	}
-
 	ctx.Send(message.Text("登录成功"))
-
 	return nil
 }
 
-// Logout example: 兔兔 登出
-func Logout(ctx *zero.Ctx) {
+func logout(ctx *zero.Ctx) error {
 	contexts[ctx.Event.GroupID] = nil
 	ctx.Send(message.Text("已登出"))
+	return nil
 }
 
-// LoginStatus example: 兔兔 登录信息
-func LoginStatus(ctx *zero.Ctx) {
+func loginStatus(ctx *zero.Ctx) error {
 	if contexts[ctx.Event.GroupID] == nil {
 		ctx.Send(message.Text("暂未登录"))
-		return
+		return nil
 	}
-
 	ctx.Send(message.Text(
 		fmt.Sprintf("已登陆 %s", contexts[ctx.Event.GroupID].session.NickName),
 	))
+	return nil
 }
 
-// PlayList example: 兔兔 歌单列表
-func PlayList(ctx *zero.Ctx) {
-	if contexts[ctx.Event.GroupID] == nil {
-		ctx.Send(message.Text("请先登录"))
-		return
-	}
-
-	var msg []message.MessageSegment
-	msg = append(msg, message.Text("### 歌单列表 ###"))
-	for index, play := range contexts[ctx.Event.GroupID].playlist {
-		msg = append(msg, message.Text(fmt.Sprintf("\n[%v] %s", index+1, play.Name)))
-	}
-
-	ctx.Send((message.Message)(msg))
-}
-
-// SwitchPlay example: 兔兔 切换歌单 AliceBot
-func SwitchPlay(ctx *zero.Ctx) error {
+func playList(ctx *zero.Ctx) error {
 	if contexts[ctx.Event.GroupID] == nil {
 		ctx.Send(message.Text("请先登录"))
 		return nil
 	}
+	var msg []message.MessageSegment
+	msg = append(msg, message.Text("#### 歌单列表 ####"))
+	for index, play := range contexts[ctx.Event.GroupID].playlist {
+		msg = append(msg, message.Text(fmt.Sprintf("\n[%v] %s", index+1, play.Name)))
+	}
+	ctx.Send((message.Message)(msg))
+	return nil
+}
 
+func switchPlay(ctx *zero.Ctx) error {
+	if contexts[ctx.Event.GroupID] == nil {
+		ctx.Send(message.Text("请先登录"))
+		return nil
+	}
 	args := ctx.State["regex_matched"].([]string)
-
 	for _, play := range contexts[ctx.Event.GroupID].playlist {
 		if play.Name == args[1] {
 			contexts[ctx.Event.GroupID].currPlay = &play
 			break
 		}
 	}
-
 	var err error
 	contexts[ctx.Event.GroupID].tracklist, err = contexts[ctx.Event.GroupID].session.GetTrackList(contexts[ctx.Event.GroupID].currPlay)
 	if err != nil {
 		return err
 	}
-
 	ctx.Send(fmt.Sprintf("切换成功"))
-
 	return nil
 }
 
-// TrackList example: 兔兔 歌曲列表
-func TrackList(ctx *zero.Ctx) {
+func trackList(ctx *zero.Ctx) error {
 	if contexts[ctx.Event.GroupID] == nil {
 		ctx.Send(message.Text("请先登录"))
-		return
+		return nil
 	}
-
 	if contexts[ctx.Event.GroupID].currPlay == nil {
 		ctx.Send(message.Text("暂未选择歌单"))
-		return
+		return nil
 	}
-
 	var msg []message.MessageSegment
 	msg = append(msg, message.Text("### 歌曲列表 ###"))
 	for index, track := range contexts[ctx.Event.GroupID].tracklist {
 		msg = append(msg, message.Text(fmt.Sprintf("\n[%v] %s", index+1, track.Name)))
 	}
-
 	ctx.Send((message.Message)(msg))
+	return nil
 }
 
-// StartGuess example: 兔兔 开始猜歌
-func StartGuess(ctx *zero.Ctx) error {
+func startGuess(ctx *zero.Ctx) error {
 	if contexts[ctx.Event.GroupID] == nil {
 		ctx.Send(message.Text("请先登录"))
 		return nil
 	}
-
 	if contexts[ctx.Event.GroupID].tracklist == nil {
 		ctx.Send(message.Text("请先选择歌单"))
 		return nil
 	}
-
 	contexts[ctx.Event.GroupID].nextSegment = 1
-
-	dice := util.GetDice(len(contexts[ctx.Event.GroupID].tracklist))
-
+	dice := rand.Intn(len(contexts[ctx.Event.GroupID].tracklist))
 	contexts[ctx.Event.GroupID].currTrack = &contexts[ctx.Event.GroupID].tracklist[dice]
-
 	tracklistDir := filepath.Join(cache, "tracklist")
-	err := os.MkdirAll(tracklistDir, 0666)
-	if err != nil {
+	if err := os.MkdirAll(tracklistDir, 0666); err != nil {
 		return err
 	}
-
 	guessingDir := filepath.Join(cache, "guessing", fmt.Sprintf("%v", ctx.Event.GroupID))
-	err = os.MkdirAll(guessingDir, 0666)
-	if err != nil {
+	if err := os.MkdirAll(guessingDir, 0666); err != nil {
 		return err
 	}
-
 	task, err := contexts[ctx.Event.GroupID].session.GetTask(contexts[ctx.Event.GroupID].currTrack)
 	if err != nil {
 		return err
 	}
-
 	_, err = os.Stat(filepath.Join(tracklistDir, fmt.Sprintf("%s.%s", task.Name, task.Type)))
 	if os.IsNotExist(err) {
 		err = contexts[ctx.Event.GroupID].session.DownloadTask(task, tracklistDir)
@@ -416,40 +342,31 @@ func StartGuess(ctx *zero.Ctx) error {
 			return err
 		}
 	}
-
 	var cmdout bytes.Buffer
 	var cmderr bytes.Buffer
-
 	cmd := exec.Command(
 		"ffprobe",
 		"-show_format",
 		filepath.Join(tracklistDir, fmt.Sprintf("%s.%s", task.Name, task.Type)),
 	)
-
 	cmd.Stdout = &cmdout
 	cmd.Stderr = &cmderr
-
 	err = cmd.Run()
 	if err != nil {
 		return err
 	}
-
 	re := regexp.MustCompile("duration=([0-9]+)")
-
 	duration, err := strconv.Atoi((string)(re.FindSubmatch(cmdout.Bytes())[1]))
 	if err != nil {
 		return err
 	}
-
 	segment := duration / 3
-
-	dice = util.GetDice(segment - contexts[ctx.Event.GroupID].segmentLen)
+	dice = rand.Intn(segment - contexts[ctx.Event.GroupID].segmentLen)
 	sp1 := fmt.Sprintf("%v", dice)
-	dice = util.GetDice(segment - contexts[ctx.Event.GroupID].segmentLen)
+	dice = rand.Intn(segment - contexts[ctx.Event.GroupID].segmentLen)
 	sp2 := fmt.Sprintf("%v", dice+segment)
-	dice = util.GetDice(segment - contexts[ctx.Event.GroupID].segmentLen)
+	dice = rand.Intn(segment - contexts[ctx.Event.GroupID].segmentLen)
 	sp3 := fmt.Sprintf("%v", dice+2*segment)
-
 	cmd = exec.Command(
 		"ffmpeg",
 		"-y", "-i",
@@ -458,105 +375,83 @@ func StartGuess(ctx *zero.Ctx) error {
 		"-ss", sp2, "-t", fmt.Sprintf("%v", contexts[ctx.Event.GroupID].segmentLen), filepath.Join(guessingDir, "2.mp3"),
 		"-ss", sp3, "-t", fmt.Sprintf("%v", contexts[ctx.Event.GroupID].segmentLen), filepath.Join(guessingDir, "3.mp3"),
 	)
-
 	err = cmd.Run()
 	if err != nil {
 		return err
 	}
-
 	ctx.Send(message.Record(
 		fmt.Sprintf("file:///%s", filepath.Join(guessingDir, fmt.Sprintf("%v.mp3", contexts[ctx.Event.GroupID].nextSegment))),
 	))
-
 	contexts[ctx.Event.GroupID].nextSegment++
-
 	return nil
 }
 
-// Tip example: 兔兔 提示
-func Tip(ctx *zero.Ctx) error {
+func tip(ctx *zero.Ctx) error {
 	if contexts[ctx.Event.GroupID] == nil {
 		ctx.Send(message.Text("请先登录"))
 		return nil
 	}
-
 	if contexts[ctx.Event.GroupID].currTrack == nil {
 		ctx.Send(message.Text("请先开始猜歌"))
 		return nil
 	}
-
 	if contexts[ctx.Event.GroupID].nextSegment > 3 {
 		ctx.Send(message.Text("提示次数已用完"))
 		return nil
 	}
-
 	guessingDir := filepath.Join(cache, "guessing", fmt.Sprintf("%v", ctx.Event.GroupID))
-
 	ctx.Send(message.Text(fmt.Sprintf("剩余提示次数：%v", 3-contexts[ctx.Event.GroupID].nextSegment)))
 	ctx.Send(message.Record(
 		fmt.Sprintf("file:///%s", filepath.Join(guessingDir, fmt.Sprintf("%v.mp3", contexts[ctx.Event.GroupID].nextSegment))),
 	))
-
 	contexts[ctx.Event.GroupID].nextSegment++
-
 	return nil
 }
 
-// Answer example: 兔兔 答案
-func Answer(ctx *zero.Ctx) error {
+func answer(ctx *zero.Ctx) error {
 	if contexts[ctx.Event.GroupID] == nil {
 		ctx.Send(message.Text("请先登录"))
 		return nil
 	}
-
 	if contexts[ctx.Event.GroupID].currTrack == nil {
 		ctx.Send(message.Text("请先开始猜歌"))
 		return nil
 	}
-
 	ctx.Send(message.Text(fmt.Sprintf("答案是 %s", contexts[ctx.Event.GroupID].currTrack.Name)))
-
 	contexts[ctx.Event.GroupID].currTrack = nil
 	contexts[ctx.Event.GroupID].nextSegment = 1
-
 	return nil
 }
 
-// Guess example: 兔兔 猜 离去之原
-func Guess(ctx *zero.Ctx) error {
+func guess(ctx *zero.Ctx) error {
 	if contexts[ctx.Event.GroupID] == nil {
 		ctx.Send(message.Text("请先登录"))
 		return nil
 	}
-
 	if contexts[ctx.Event.GroupID].currTrack == nil {
 		ctx.Send(message.Text("请先开始猜歌"))
 		return nil
 	}
-
 	args := ctx.State["regex_matched"].([]string)
-
-	if GuessCheck(args[1], contexts[ctx.Event.GroupID].currTrack.Name) {
+	if guessCheck(args[1], contexts[ctx.Event.GroupID].currTrack.Name) {
 		ctx.Send("おめでとう")
 		contexts[ctx.Event.GroupID].currTrack = nil
 		contexts[ctx.Event.GroupID].nextSegment = 1
 		return nil
 	}
 	for _, tn := range contexts[ctx.Event.GroupID].currTrack.Tns {
-		if GuessCheck(args[1], tn) {
+		if guessCheck(args[1], tn) {
 			ctx.Send("おめでとう")
 			contexts[ctx.Event.GroupID].currTrack = nil
 			contexts[ctx.Event.GroupID].nextSegment = 1
 			return nil
 		}
 	}
-
 	ctx.Send(message.Text("残念"))
-
 	return nil
 }
 
-func GuessCheck(guess string, answer string) bool {
+func guessCheck(guess string, answer string) bool {
 	newGuess := strings.ToLower(guess)
 	newAnswer := strings.ToLower(answer)
 	guessLen := len(newGuess)

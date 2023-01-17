@@ -1,48 +1,51 @@
 package meta
 
 import (
-	"alice-bot-go/src/util"
-	"github.com/sirupsen/logrus"
 	zero "github.com/wdvxdr1123/ZeroBot"
 	"github.com/wdvxdr1123/ZeroBot/message"
+
+	"alice-bot-go/src/core/alice"
+)
+
+var (
+	plugin = "meta"
 )
 
 func init() {
+	// usage/example: <NickName> 版本
 	zero.OnRegex(`^版本$`, zero.OnlyToMe).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		Version(ctx)
-		logrus.Infof("[meta][Version][success]")
+		fn := "version"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return version(ctx)
+		})
 	})
-	zero.OnRegex(`^在吗$`, zero.OnlyToMe).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		Alive(ctx)
-		logrus.Infof("[meta][Alive][success]")
-	})
+	// usage/example: <NickName> 源码
 	zero.OnRegex(`^源码$`, zero.OnlyToMe).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		SourceCode(ctx)
-		logrus.Infof("[meta][SourceCode][success]")
+		fn := "code"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return code(ctx)
+		})
 	})
+	// usage/example: <NickName> 许可证
 	zero.OnRegex(`^许可证$`, zero.OnlyToMe).SetBlock(true).Handle(func(ctx *zero.Ctx) {
-		License(ctx)
-		logrus.Infof("[meta][License][success]")
+		fn := "license"
+		alice.CommandWapper(ctx, true, plugin, fn, func() error {
+			return license(ctx)
+		})
 	})
 }
 
-func Version(ctx *zero.Ctx) {
-	ctx.Send(message.Text("v0.2"))
+func version(ctx *zero.Ctx) error {
+	ctx.Send(message.Text("v0.3"))
+	return nil
 }
 
-func Alive(ctx *zero.Ctx) {
-	dice := util.GetDice(100)
-	if dice > 0 {
-		ctx.Send(message.Text("兔兔在哦~"))
-	} else {
-		ctx.Send(message.Text("在吗起手，必定小丑🤡"))
-	}
+func code(ctx *zero.Ctx) error {
+	ctx.Send(message.Text("https://github.com/TrymenT-AlphA/alice-bot-go"))
+	return nil
 }
 
-func SourceCode(ctx *zero.Ctx) {
-	ctx.Send(message.Text())
-}
-
-func License(ctx *zero.Ctx) {
-	ctx.Send(message.Text())
+func license(ctx *zero.Ctx) error {
+	ctx.Send(message.Text("GNU General Public License v3.0"))
+	return nil
 }

@@ -1,0 +1,17 @@
+{
+  "commits": {
+    "url": "",
+    "url_format": "https://api.github.com/repos/%s/%s/commits",
+    "url_params": ["OWNER", "REPO"],
+    "method": "GET",
+    "params": {
+      "page": "分页数",
+      "per_page": "每页的请求数"
+    },
+    "header": {
+      "Authorization": "github token"
+    },
+    "body": null,
+    "comment": "仓库的提交信息"
+  }
+}

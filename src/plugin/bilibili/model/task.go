@@ -17,66 +17,59 @@ func (*Task) TableName() string {
 
 func (*Task) ReadAll(db *gorm.DB) ([]Task, error) {
 	var result []Task
-	err := db.Find(&result).Error
-	if err != nil {
+	if err := db.Find(&result).Error; err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 
 func (task *Task) Create(db *gorm.DB) error {
-	err := db.Create(task).Error
-	if err != nil {
+	if err := db.Create(task).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func (task *Task) Read(db *gorm.DB) error {
-	err := db.Where(&Task{
+	if err := db.Where(&Task{
 		Up: Up{
 			UID: task.Up.UID,
 		},
 		GroupID: task.GroupID,
-	}).First(task).Error
-	if err != nil {
+	}).First(task).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func (task *Task) Update(db *gorm.DB) error {
-	err := db.Where(&Task{
+	if err := db.Where(&Task{
 		Up: Up{
 			UID: task.Up.UID,
 		},
 		GroupID: task.GroupID,
-	}).Updates(task).Error
-	if err != nil {
+	}).Updates(task).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func (task *Task) Delete(db *gorm.DB) error {
-	err := db.Delete(&Task{
+	if err := db.Delete(&Task{
 		Up: Up{
 			UID: task.Up.UID,
 		},
 		GroupID: task.GroupID,
-	}).Error
-	if err != nil {
+	}).Error; err != nil {
 		return err
 	}
 	return nil
 }
 
 func (task *Task) CreateOrUpdate(db *gorm.DB) error {
-	err := db.Clauses(
-		clause.OnConflict{
-			UpdateAll: true,
-		}).Create(task).Error
-	if err != nil {
+	if err := db.Clauses(clause.OnConflict{
+		UpdateAll: true,
+	}).Create(task).Error; err != nil {
 		return err
 	}
 	return nil

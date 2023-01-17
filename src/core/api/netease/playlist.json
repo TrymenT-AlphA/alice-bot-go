@@ -1,0 +1,14 @@
+{
+  "detail":{
+    "url": "http://139.9.51.153:3002/playlist/detail",
+    "url_format": "",
+    "url_params": null,
+    "method": "GET",
+    "params": {
+      "id": "歌单id"
+    },
+    "header": {},
+    "body": null,
+    "comment": "获取歌单信息"
+  }
+}

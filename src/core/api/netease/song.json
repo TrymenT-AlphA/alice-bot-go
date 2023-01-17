@@ -1,0 +1,15 @@
+{
+  "url":{
+    "url": "http://139.9.51.153:3002/song/url",
+    "url_format": "",
+    "url_params": null,
+    "method": "GET",
+    "params": {
+      "id": "歌曲id",
+      "br": "码率"
+    },
+    "header": {},
+    "body": null,
+    "comment": "获取歌曲链接"
+  }
+}

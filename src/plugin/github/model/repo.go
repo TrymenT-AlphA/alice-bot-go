@@ -1,15 +1,18 @@
 package model
 
 import (
-	"alice-bot-go/src/types"
 	"errors"
 	"fmt"
-	"github.com/go-git/go-git/v5"
-	"github.com/tidwall/gjson"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/tidwall/gjson"
+
+	"alice-bot-go/src/core/alice"
+	"alice-bot-go/src/core/util"
 )
 
 type Repo struct {
@@ -35,40 +38,39 @@ func (repo *Repo) DefaultLocal() (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	return filepath.Join(cwd, "..", "data", "repo", fmt.Sprintf("%s/%s", repo.Owner, repo.Name)), nil
+	defaultLocal := filepath.Join(cwd, "..", "data", "cache", "github", fmt.Sprintf("%s/%s", repo.Owner, repo.Name))
+	return defaultLocal, nil
 }
 
-func (repo *Repo) GetLatestCommit(token string) (*Commit, error) {
-	githubAPI, err := types.NewRestAPI("github", "repos", "commits")
+func (repo *Repo) GetLatestCommit(auth string) (*Commit, error) {
+	api, err := alice.NewAPI("github", "repos", "commits")
 	if err != nil {
 		return nil, err
 	}
-
-	githubAPI.UrlParams = []interface{}{repo.Owner, repo.Name}
-
-	githubAPI.Params["page"] = 1
-	githubAPI.Params["per_page"] = 1
-
-	data, err := githubAPI.DoRequestAuth(&http.Client{}, token)
+	api.UrlParams = []interface{}{repo.Owner, repo.Name}
+	api.Params = map[string]interface{}{
+		"page":     1,
+		"per_page": 1,
+	}
+	api.Header = map[string]string{
+		"Authorization": auth,
+	}
+	data, err := api.DoRequest(&http.Client{})
 	if err != nil {
 		return nil, err
 	}
-
-	temp := gjson.GetBytes(data, "0.commit")
-	commitDate := temp.Get("committer.date").String()
-	commitMsg := temp.Get("message").String()
-	commitTimestamp, err := time.Parse("2006-01-02T15:04:05Z", commitDate)
+	c := gjson.GetBytes(data, "0.commit")
+	commitDate := c.Get("committer.date").String()
+	commitMsg := c.Get("message").String()
+	commitTime, err := time.Parse("2006-01-02T15:04:05Z", commitDate)
 	if err != nil {
 		return nil, err
 	}
-
 	commit := &Commit{
 		Date:      commitDate,
 		Message:   commitMsg,
-		Timestamp: commitTimestamp.Unix(),
+		Timestamp: commitTime.Unix(),
 	}
-
 	return commit, nil
 }
 
@@ -77,12 +79,9 @@ func (repo *Repo) Clone(local string) error {
 		URL:               repo.Url(),
 		RecurseSubmodules: git.DefaultSubmoduleRecursionDepth,
 	})
-	if errors.Is(err, git.ErrRepositoryAlreadyExists) {
-		return nil
-	} else if err != nil {
+	if err != nil && !errors.Is(err, git.ErrRepositoryAlreadyExists) {
 		return err
 	}
-
 	return nil
 }
 
@@ -91,37 +90,26 @@ func (repo *Repo) Pull(local string) error {
 	if err != nil {
 		return err
 	}
-
 	worktree, err := repository.Worktree()
 	if err != nil {
 		return err
 	}
-
 	err = worktree.Pull(&git.PullOptions{RemoteName: "origin"})
-	if errors.Is(err, git.NoErrAlreadyUpToDate) {
-		return nil
-	} else if err != nil {
+	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return err
 	}
-
 	return nil
 }
 
 func (repo *Repo) CloneOrPull(local string) error {
-	_, err := os.Stat(local)
-	if err == nil {
-		err = repo.Pull(local)
-		if err != nil {
-			return err
-		}
-	} else if os.IsNotExist(err) {
-		err = repo.Clone(local)
-		if err != nil {
+	if util.IsExist(local) {
+		if err := repo.Pull(local); err != nil {
 			return err
 		}
 	} else {
-		return err
+		if err := repo.Clone(local); err != nil {
+			return err
+		}
 	}
-
 	return nil
 }

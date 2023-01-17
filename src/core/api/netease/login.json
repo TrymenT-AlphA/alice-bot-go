@@ -1,0 +1,15 @@
+{
+  "cellphone":{
+    "url": "http://139.9.51.153:3002/login/cellphone",
+    "url_format": "",
+    "url_params": null,
+    "method": "GET",
+    "params": {
+      "phone": "手机号",
+      "password": "密码"
+    },
+    "header": {},
+    "body": null,
+    "comment": "使用手机密码进行登录"
+  }
+}
